@@ -1,0 +1,158 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  SUB_ADMIN
+  DRIVER
+  PASSENGER
+}
+
+enum Permission {
+  MANAGE_USERS
+  VERIFY_DRIVERS
+  MANAGE_RIDES
+  VIEW_FINANCIALS
+  MANAGE_SUB_ADMINS
+}
+
+enum RideStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentMethod {
+  MTN_MOMO
+  ORANGE_MONEY
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model User {
+  id                String       @id @default(uuid())
+  phone             String       @unique
+  name              String
+  email             String?      @unique
+  avatarUrl         String?      @map("avatar_url")
+  bio               String?
+  role              Role         @default(PASSENGER)
+  permissions       Permission[]
+  isVerified        Boolean      @default(false) @map("is_verified")
+  ratingAvg         Float        @default(0.0) @map("rating_avg")
+  ratingCount       Int          @default(0) @map("rating_count")
+  refreshTokenHash  String?      @map("refresh_token_hash")
+  vehicleMake       String?      @map("vehicle_make")
+  vehicleModel      String?      @map("vehicle_model")
+  vehiclePlate      String?      @map("vehicle_plate")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  rides         Ride[]       @relation("DriverRides")
+  bookings      Booking[]    @relation("PassengerBookings")
+  reviewsGiven  Review[]     @relation("ReviewsGiven")
+  reviewsRecd   Review[]     @relation("ReviewsReceived")
+  createdAudits AdminAudit[] @relation("AdminActor")
+
+  @@map("users")
+}
+
+model Ride {
+  id                 String     @id @default(uuid())
+  driverId           String     @map("driver_id")
+  driver             User       @relation("DriverRides", fields: [driverId], references: [id], onDelete: Cascade)
+  originCity         String     @map("origin_city")
+  originAddress      String     @map("origin_address")
+  destinationCity    String     @map("destination_city")
+  destinationAddress String     @map("destination_address")
+  departureAt        DateTime   @map("departure_at")
+  seatsTotal         Int        @map("seats_total")
+  seatsAvailable     Int        @map("seats_available")
+  pricePerSeat       Int        @map("price_per_seat")
+  status             RideStatus @default(ACTIVE)
+  notes              String?
+  waypoints          String[]   @default([])
+  acceptsColis       Boolean    @default(false) @map("accepts_colis")
+  isRecurring        Boolean    @default(false) @map("is_recurring")
+  daysOfWeek         Int[]      @default([])
+  pickupNote         String?    @map("pickup_note")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  bookings Booking[]
+  reviews  Review[]
+
+  @@map("rides")
+}
+
+model GlobalConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("global_configs")
+}
+
+model Booking {
+  id            String        @id @default(uuid())
+  rideId        String        @map("ride_id")
+  ride          Ride          @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  passengerId   String        @map("passenger_id")
+  passenger     User          @relation("PassengerBookings", fields: [passengerId], references: [id], onDelete: Cascade)
+  seatsBooked   Int           @map("seats_booked")
+  totalPrice    Int           @map("total_price")
+  status        BookingStatus @default(PENDING)
+  paymentMethod PaymentMethod @default(MTN_MOMO) @map("payment_method")
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+  paymentRef    String?       @map("payment_ref")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@map("bookings")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  reviewerId String   @map("reviewer_id")
+  reviewer   User     @relation("ReviewsGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+  revieweeId String   @map("reviewee_id")
+  reviewee   User     @relation("ReviewsReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+  rideId     String   @map("ride_id")
+  ride       Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("reviews")
+}
+
+model AdminAudit {
+  id        String   @id @default(uuid())
+  actorId   String   @map("actor_id")
+  actor     User     @relation("AdminActor", fields: [actorId], references: [id], onDelete: Cascade)
+  action    String
+  targetId  String?  @map("target_id")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admin_audits")
+}
